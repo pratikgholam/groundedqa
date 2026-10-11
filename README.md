@@ -4,17 +4,6 @@ A document Q&A API that answers questions using only your documents and cites th
 
 > Portfolio project. Uses sample documents only. Built with AI-assisted tooling; design decisions and trade-offs are documented below.
 
-## Status
-
-Tick these only when the code and tests back them up.
-
-- [ ] Stage 1: FastAPI skeleton, Postgres + pgvector via Docker Compose, health check
-- [ ] Stage 2: Ingestion (text extraction, chunking, embeddings, storage)
-- [ ] Stage 3: Retrieval endpoint (similarity search)
-- [ ] Stage 4: Answer generation with citations and a "not enough context" path
-- [ ] Stage 5: Evaluation script (retrieval hit rate)
-- [ ] Stage 6: pytest suite (LLM/embedding calls mocked) and GitHub Actions CI
-
 ## How it works
 
 **Ingest:** `POST /documents` extracts text, splits it into overlapping chunks, embeds each chunk, and stores text and vectors in PostgreSQL (pgvector).
