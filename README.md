@@ -70,7 +70,12 @@ Fill in with what you actually chose and why:
 
 ## Limitations
 
-- _List real ones as you find them (e.g., scanned PDFs, large files, no auth)._
+- **pgvector extension:** `init_db` runs `CREATE EXTENSION IF NOT EXISTS vector`, which requires superuser privileges; managed Postgres without extension rights will fail to start.
+- **No auth or rate limiting:** anyone who can reach the API can upload and query documents.
+- **Embedding/LLM calls go to OpenAI:** an API key is required for real ingestion and answers; tests mock these.
+- **Chunking is character-based**, not token-based; results depend on the `CHUNK_SIZE`/`CHUNK_OVERLAP` settings.
+- **PDFs must have a text layer:** scanned/image-only PDFs yield no text.
+- **No streaming / pagination:** `/documents` returns all documents at once.
 
 ## Possible next steps
 
