@@ -13,3 +13,17 @@ class DocumentOut(BaseModel):
     filename: str
     created_at: datetime
     chunk_count: int
+
+
+class ChunkOut(BaseModel):
+    document: str
+    text: str
+    score: float
+
+
+class AskIn(BaseModel):
+    question: str
+
+
+class AskOut(BaseModel):
+    sources: list[ChunkOut]

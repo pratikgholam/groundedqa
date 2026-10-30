@@ -35,7 +35,7 @@ Mark a stage done only when it works and is tested.
 
 - [x] Stage 1: FastAPI skeleton, Postgres + pgvector via Docker Compose, `/health`
 - [x] Stage 2: Ingestion (text extraction, chunking with overlap, embeddings, storage)
-- [ ] Stage 3: Retrieval endpoint (similarity search returning raw chunks)
+- [x] Stage 3: Retrieval endpoint (similarity search returning raw chunks)
 - [ ] Stage 4: Answer generation with citations and a "not enough context" path
 - [ ] Stage 5: Evaluation script (~20 questions with expected sources, reports retrieval hit rate)
 - [ ] Stage 6: pytest suite (mocked providers) and GitHub Actions CI
