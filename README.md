@@ -8,7 +8,7 @@ A document Q&A API that answers questions using only your documents and cites th
 
 **Ingest:** `POST /documents` extracts text, splits it into overlapping chunks, embeds each chunk, and stores text and vectors in PostgreSQL (pgvector).
 
-**Ask:** `POST /ask` embeds the question and returns the top-k most similar chunks, each with its source document and a similarity score. The service returns the retrieved chunks; no answer is generated yet.
+**Ask:** `POST /ask` embeds the question and returns the top-k most similar chunks from PostgreSQL (pgvector). When no chunk meets `SIMILARITY_CUTOFF`, it returns `found=false` with no LLM call. Otherwise it generates an answer using only the retrieved chunks and returns `found=true` with citations; each citation's `page` is `null` for now.
 
 ## API
 
@@ -16,8 +16,12 @@ A document Q&A API that answers questions using only your documents and cites th
 |---|---|---|
 | POST | `/documents` | Upload and index a document |
 | GET | `/documents` | List indexed documents |
-| POST | `/ask` | Ask a question; returns retrieved chunks |
+| POST | `/ask` | Ask a question; returns answer, found, and citations |
 | GET | `/health` | Health check |
+
+## Error behavior
+
+Upstream provider (embedding/LLM) failures return HTTP 502 with a generic message (`"Upstream model provider unavailable. Try again later."`) and are logged at `ERROR`. Provider exception messages are never returned to the client or included in the log message.
 
 ## Data model (current schema)
 
@@ -47,6 +51,24 @@ pytest
 
 LLM and embedding calls are mocked, so tests need no API key.
 
+## Configuration
+
+Settings are loaded from environment (via `.env`) with these defaults:
+
+| Variable | Default |
+|---|---|
+| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/groundedqa` |
+| `OPENAI_API_KEY` | `""` |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` |
+| `CHAT_MODEL` | `gpt-4o-mini` |
+| `EMBEDDING_DIM` | `1536` |
+| `CHUNK_SIZE` | `800` |
+| `CHUNK_OVERLAP` | `100` |
+| `TOP_K` | `5` |
+| `SIMILARITY_CUTOFF` | `0.3` |
+| `MAX_UPLOAD_MB` | `10` |
+| `LOG_LEVEL` | `INFO` |
+
 ## Evaluation
 
 `eval/questions.json` is a placeholder question set and `eval/run.py` is not yet implemented. Evaluation (Stage 5) is planned.
@@ -66,6 +88,9 @@ Fill in with what you actually chose and why:
 - **No auth or rate limiting:** anyone who can reach the API can upload and query documents.
 - **Embedding/LLM calls go to OpenAI:** an API key is required for real ingestion and answers; tests mock these.
 - **Chunking is character-based**, not token-based; results depend on the `CHUNK_SIZE`/`CHUNK_OVERLAP` settings.
+- **`found=true` is not a support guarantee:** it only means retrieved chunks passed `SIMILARITY_CUTOFF`; the model is not required to confirm support, so it may still answer from weak context.
+- **Page citations are not implemented:** every citation's `page` is `null`; page-level citations require a schema migration and extraction change (planned).
+- **Embedding dimension mismatch:** `db/init.sql` fixes the vector column at `vector(1536)`, while `EMBEDDING_DIM` is configurable; they must match for storage to work.
 - **PDFs must have a text layer:** scanned/image-only PDFs yield no text.
 - **No streaming / pagination:** `/documents` returns all documents at once.
 
