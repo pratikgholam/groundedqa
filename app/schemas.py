@@ -15,10 +15,10 @@ class DocumentOut(BaseModel):
     chunk_count: int
 
 
-class ChunkOut(BaseModel):
-    document: str
-    text: str
-    score: float
+class CitationOut(BaseModel):
+    document_id: int
+    page: int | None = None
+    passage: str
 
 
 class AskIn(BaseModel):
@@ -26,4 +26,6 @@ class AskIn(BaseModel):
 
 
 class AskOut(BaseModel):
-    sources: list[ChunkOut]
+    answer: str
+    found: bool
+    citations: list[CitationOut]

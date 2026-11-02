@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     TOP_K: int = 5
     SIMILARITY_CUTOFF: float = 0.3
     MAX_UPLOAD_MB: int = 10
+    LOG_LEVEL: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

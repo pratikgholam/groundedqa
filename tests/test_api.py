@@ -1,9 +1,12 @@
+from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.db import get_db
 from app.models import Chunk, Document
 from app.services import embeddings as embeddings_module
+from app.services import generation as generation_module
 
 EMBEDDING_DIM = 1536
 
@@ -12,8 +15,16 @@ def _fake_embed(texts):
     return [[1.0] + [0.0] * (EMBEDDING_DIM - 1) for _ in texts]
 
 
-def test_ask_returns_raw_sources(db_session, monkeypatch):
+def _fake_llm_client(content: str):
+    client = MagicMock()
+    client.chat.completions.create.return_value.choices[0].message.content = content
+    return client
+
+
+def test_ask_returns_grounded_answer(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
+    llm_client = _fake_llm_client("The answer is grounded.")
+    monkeypatch.setattr(generation_module, "_get_client", lambda: llm_client)
     doc = Document(filename="notes.txt")
     db_session.add(doc)
     db_session.flush()
@@ -31,12 +42,15 @@ def test_ask_returns_raw_sources(db_session, monkeypatch):
     resp = client.post("/ask", json={"question": "hello"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert set(body) == {"sources"}
-    assert len(body["sources"]) == 1
-    source = body["sources"][0]
-    assert source["document"] == "notes.txt"
-    assert source["text"] == "hello world"
-    assert "score" in source
+    assert set(body) == {"answer", "found", "citations"}
+    assert body["found"] is True
+    assert body["answer"] == "The answer is grounded."
+    assert len(body["citations"]) == 1
+    citation = body["citations"][0]
+    assert citation["document_id"] == doc.id
+    assert citation["page"] is None
+    assert citation["passage"] == "hello world"
+    assert llm_client.chat.completions.create.called
 
 
 def test_ask_empty_question_returns_400(db_session, monkeypatch):
@@ -55,6 +69,11 @@ def test_ask_missing_question_returns_422(db_session, monkeypatch):
 
 def test_ask_sql_injection_attempt_safe(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
+    monkeypatch.setattr(
+        generation_module,
+        "_get_client",
+        lambda: _fake_llm_client("injection-safe answer"),
+    )
     doc = Document(filename="notes.txt")
     db_session.add(doc)
     db_session.flush()

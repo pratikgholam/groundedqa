@@ -46,6 +46,7 @@ def retrieve(
             continue
         results.append(
             {
+                "document_id": chunk.document_id,
                 "document": filename,
                 "text": chunk.text,
                 "score": score,

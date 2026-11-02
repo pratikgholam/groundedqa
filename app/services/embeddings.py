@@ -1,7 +1,11 @@
 # call the embedding provider
+import logging
 from openai import OpenAI
 
 from app.config import settings
+from app.services.errors import UpstreamProviderError
+
+logger = logging.getLogger(__name__)
 
 _client: OpenAI | None = None
 
@@ -23,13 +27,22 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     """
     if not texts:
         return []
-    client = _get_client()
-    embeddings: list[list[float]] = []
-    for start in range(0, len(texts), _BATCH_SIZE):
-        batch = texts[start : start + _BATCH_SIZE]
-        response = client.embeddings.create(model=settings.EMBEDDING_MODEL, input=batch)
-        embeddings.extend(item.embedding for item in response.data)
-    return embeddings
+    try:
+        client = _get_client()
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), _BATCH_SIZE):
+            batch = texts[start : start + _BATCH_SIZE]
+            response = client.embeddings.create(model=settings.EMBEDDING_MODEL, input=batch)
+            embeddings.extend(item.embedding for item in response.data)
+        return embeddings
+    except Exception as exc:
+        # Log error type and operation only; never the exception message,
+        # which could contain request content or API key fragments.
+        logger.error(
+            "upstream provider failed",
+            extra={"operation": "embeddings", "exc_type": type(exc).__name__},
+        )
+        raise UpstreamProviderError("embeddings", exc) from exc
 
 
 def embed_text(text: str) -> list[float]:
