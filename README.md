@@ -8,7 +8,7 @@ A document Q&A API that answers questions using only your documents and cites th
 
 **Ingest:** `POST /documents` extracts text, splits it into overlapping chunks, embeds each chunk, and stores text and vectors in PostgreSQL (pgvector).
 
-**Ask:** `POST /ask` embeds the question, retrieves the top-k most similar chunks, and sends them with the question to an LLM. The answer includes the source chunks. If the retrieved context doesn't support an answer, the service says so instead of guessing.
+**Ask:** `POST /ask` embeds the question and returns the top-k most similar chunks, each with its source document and a similarity score. The service returns the retrieved chunks; no answer is generated yet.
 
 ## API
 
@@ -16,17 +16,19 @@ A document Q&A API that answers questions using only your documents and cites th
 |---|---|---|
 | POST | `/documents` | Upload and index a document |
 | GET | `/documents` | List indexed documents |
-| POST | `/ask` | Ask a question; returns answer and sources |
+| POST | `/ask` | Ask a question; returns retrieved chunks |
 | GET | `/health` | Health check |
 
-## Data model
+## Data model (current schema)
 
 - `documents`: id, filename, created_at
 - `chunks`: id, document_id, chunk_index, text, embedding (vector)
 
 ## Tech stack
 
-Python, FastAPI, PostgreSQL + pgvector, pytest, Docker Compose, GitHub Actions.
+Python, FastAPI, PostgreSQL + pgvector, pytest, Docker Compose.
+
+CI via GitHub Actions is planned (no `.github/workflows` yet).
 
 ## Run locally
 
@@ -47,17 +49,7 @@ LLM and embedding calls are mocked, so tests need no API key.
 
 ## Evaluation
 
-`eval/` contains a small question set with expected source chunks. Run:
-
-```bash
-python -m eval.run
-```
-
-Results (fill in from real runs):
-
-| Chunk size / overlap | top-k | Retrieval hit rate |
-|---|---|---|
-| _TBD_ | _TBD_ | _TBD_ |
+`eval/questions.json` is a placeholder question set and `eval/run.py` is not yet implemented. Evaluation (Stage 5) is planned.
 
 ## Design decisions and trade-offs
 
