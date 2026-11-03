@@ -4,10 +4,10 @@ from app.models import Chunk, Document
 from app.services import embeddings as embeddings_module
 from app.services.retrieval import retrieve
 
-EMBEDDING_DIM = 1536
+EMBEDDING_DIM = 768
 
 
-def _fake_embed(texts):
+def _fake_embed(texts, task=None):
     return [[1.0] + [0.0] * (EMBEDDING_DIM - 1) for _ in texts]
 
 

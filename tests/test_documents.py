@@ -6,8 +6,8 @@ from app.db import get_db
 from app.services import embeddings as embeddings_module
 
 
-def _fake_embed(texts):
-    return [[0.1] * 1536 for _ in texts]
+def _fake_embed(texts, task=None):
+    return [[0.1] * 768 for _ in texts]
 
 
 def test_upload_and_list_documents(db_session, monkeypatch):

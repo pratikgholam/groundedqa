@@ -12,7 +12,7 @@ from app.services import embeddings as embeddings_module
 from app.services import generation as generation_module
 from app.services.errors import UpstreamProviderError
 
-EMBEDDING_DIM = 1536
+EMBEDDING_DIM = 768
 
 
 def formatted_records(records):
@@ -20,25 +20,35 @@ def formatted_records(records):
     return [fmt.format(r) for r in records]
 
 
-def _fake_embed(texts):
+def _fake_embed(texts, task=None):
     return [[1.0] + [0.0] * (EMBEDDING_DIM - 1) for _ in texts]
 
 
-def _fake_llm_client(content=None, exc=None, embed_exc=None):
+def _fake_llm_client(check_content="YES", answer_content="The answer is grounded.", exc=None, embed_exc=None):
     client = MagicMock()
     if exc is not None:
         client.chat.completions.create.side_effect = exc
     else:
-        client.chat.completions.create.return_value.choices[0].message.content = content
+        check_mock = MagicMock()
+        check_mock.choices[0].message.content = check_content
+        answer_mock = MagicMock()
+        answer_mock.choices[0].message.content = answer_content
+        # First chat call: answerability check; second: answer generation.
+        client.chat.completions.create.side_effect = [check_mock, answer_mock]
     if embed_exc is not None:
         client.embeddings.create.side_effect = embed_exc
     return client
 
 
+def _mock_chat(monkeypatch, client):
+    monkeypatch.setattr(generation_module, "_get_client", lambda: client)
+    monkeypatch.setattr(generation_module, "_get_chat_client", lambda: client)
+
+
 def test_ask_grounded_answer_with_citations(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
-    llm_client = _fake_llm_client("The answer is grounded.")
-    monkeypatch.setattr(generation_module, "_get_client", lambda: llm_client)
+    llm_client = _fake_llm_client()
+    _mock_chat(monkeypatch, llm_client)
 
     doc = Document(filename="notes.txt")
     db_session.add(doc)
@@ -68,10 +78,92 @@ def test_ask_grounded_answer_with_citations(db_session, monkeypatch):
     assert llm_client.chat.completions.create.called
 
 
+def test_ask_answerable_check_no_skips_generation(db_session, monkeypatch):
+    monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
+    llm_client = _fake_llm_client(check_content="NO")
+    _mock_chat(monkeypatch, llm_client)
+
+    doc = Document(filename="notes.txt")
+    db_session.add(doc)
+    db_session.flush()
+    db_session.add(
+        Chunk(
+            document_id=doc.id,
+            chunk_index=0,
+            text="hello world",
+            embedding=[1.0] + [0.0] * (EMBEDDING_DIM - 1),
+        )
+    )
+    db_session.commit()
+
+    client = TestClient(app)
+    resp = client.post("/ask", json={"question": "hello"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["found"] is False
+    assert body["answer"] == ""
+    assert body["citations"] == []
+    # Answerability check was called; generation was not (only 1 chat call).
+    assert llm_client.chat.completions.create.call_count == 1
+
+
+def test_ask_answerable_check_whitespace_is_yes(db_session, monkeypatch):
+    monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
+    llm_client = _fake_llm_client(check_content="yes ")
+    _mock_chat(monkeypatch, llm_client)
+
+    doc = Document(filename="notes.txt")
+    db_session.add(doc)
+    db_session.flush()
+    db_session.add(
+        Chunk(
+            document_id=doc.id,
+            chunk_index=0,
+            text="hello world",
+            embedding=[1.0] + [0.0] * (EMBEDDING_DIM - 1),
+        )
+    )
+    db_session.commit()
+
+    client = TestClient(app)
+    resp = client.post("/ask", json={"question": "hello"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["found"] is True
+    assert body["answer"] == "The answer is grounded."
+
+
+def test_ask_answerable_check_prose_is_no(db_session, monkeypatch):
+    monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
+    llm_client = _fake_llm_client(check_content="The passages do not say")
+    _mock_chat(monkeypatch, llm_client)
+
+    doc = Document(filename="notes.txt")
+    db_session.add(doc)
+    db_session.flush()
+    db_session.add(
+        Chunk(
+            document_id=doc.id,
+            chunk_index=0,
+            text="hello world",
+            embedding=[1.0] + [0.0] * (EMBEDDING_DIM - 1),
+        )
+    )
+    db_session.commit()
+
+    client = TestClient(app)
+    resp = client.post("/ask", json={"question": "hello"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["found"] is False
+    assert body["answer"] == ""
+    assert body["citations"] == []
+
+
 def test_ask_refusal_when_no_chunks(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
     llm_client = _fake_llm_client("unused")
-    monkeypatch.setattr(generation_module, "_get_client", lambda: llm_client)
+    _mock_chat(monkeypatch, llm_client)
 
     client = TestClient(app)
     resp = client.post("/ask", json={"question": "hello"})
@@ -86,7 +178,7 @@ def test_ask_refusal_when_no_chunks(db_session, monkeypatch):
 def test_ask_refusal_when_all_chunks_below_threshold(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
     llm_client = _fake_llm_client("unused")
-    monkeypatch.setattr(generation_module, "_get_client", lambda: llm_client)
+    _mock_chat(monkeypatch, llm_client)
 
     doc = Document(filename="notes.txt")
     db_session.add(doc)
@@ -117,7 +209,7 @@ def test_ask_chat_failure_returns_502(db_session, monkeypatch, caplog):
     sdk_exc = Exception("SECRET-TEST-MARKER")
     monkeypatch.setattr(
         generation_module,
-        "_get_client",
+        "_get_chat_client",
         lambda: _fake_llm_client(exc=sdk_exc),
     )
 

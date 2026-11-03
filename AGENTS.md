@@ -61,6 +61,7 @@ Provider, model names, top-k, chunk size, and relevance threshold live in config
 ## Decisions
 
 - Citations for Stage 4 include `page` as null for now. Page-level citations are a later stage, requiring a schema migration and an extraction change.
+- DRAFT (owner to edit in own words): /ask makes one extra chat call after retrieval to decide whether the chunks contain the answer. Anything other than exactly YES returns found=false, so the check fails closed. The similarity cutoff alone was shown not to separate on-topic from off-topic questions on the test corpus, which is why the check exists. The check adds latency and depends on the local model's judgment. Its accuracy is not yet measured.
 
 ## Stages
 
@@ -70,7 +71,7 @@ Mark a stage done only when it works and is tested.
 - [x] Stage 2: Ingestion (text extraction, chunking with overlap, embeddings, storage)
 - [x] Stage 3: Retrieval endpoint (similarity search returning raw chunks)
 - [x] Stage 4: Answer generation with citations and a "not enough context" path (page may be null until page extraction is added)
-- [ ] Stage 5: Evaluation script (~20 questions with expected sources, reports retrieval hit rate)
+- [x] Stage 5: Evaluation script (~20 questions with expected sources, reports retrieval hit rate)
 - [ ] Stage 6: pytest suite (mocked providers) and GitHub Actions CI
 - [ ] Stage 7: Ingestion CLI (`groundedqa ingest <folder>`), idempotent
 - [ ] Stage 8: Auth (API key) and tenant-filtered retrieval

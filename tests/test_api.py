@@ -8,23 +8,29 @@ from app.models import Chunk, Document
 from app.services import embeddings as embeddings_module
 from app.services import generation as generation_module
 
-EMBEDDING_DIM = 1536
+EMBEDDING_DIM = 768
 
 
-def _fake_embed(texts):
+def _fake_embed(texts, task=None):
     return [[1.0] + [0.0] * (EMBEDDING_DIM - 1) for _ in texts]
 
 
-def _fake_llm_client(content: str):
+def _fake_llm_client(check_content="YES", answer_content="The answer is grounded."):
     client = MagicMock()
-    client.chat.completions.create.return_value.choices[0].message.content = content
+    check_mock = MagicMock()
+    check_mock.choices[0].message.content = check_content
+    answer_mock = MagicMock()
+    answer_mock.choices[0].message.content = answer_content
+    # First chat call: answerability check; second: answer generation.
+    client.chat.completions.create.side_effect = [check_mock, answer_mock]
     return client
 
 
 def test_ask_returns_grounded_answer(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
-    llm_client = _fake_llm_client("The answer is grounded.")
+    llm_client = _fake_llm_client()
     monkeypatch.setattr(generation_module, "_get_client", lambda: llm_client)
+    monkeypatch.setattr(generation_module, "_get_chat_client", lambda: llm_client)
     doc = Document(filename="notes.txt")
     db_session.add(doc)
     db_session.flush()
@@ -72,6 +78,11 @@ def test_ask_sql_injection_attempt_safe(db_session, monkeypatch):
     monkeypatch.setattr(
         generation_module,
         "_get_client",
+        lambda: _fake_llm_client("injection-safe answer"),
+    )
+    monkeypatch.setattr(
+        generation_module,
+        "_get_chat_client",
         lambda: _fake_llm_client("injection-safe answer"),
     )
     doc = Document(filename="notes.txt")

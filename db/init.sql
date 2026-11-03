@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
     text TEXT NOT NULL,
-    embedding vector(1536)
+    embedding vector(768)
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
