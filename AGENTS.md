@@ -72,7 +72,7 @@ Mark a stage done only when it works and is tested.
 - [x] Stage 3: Retrieval endpoint (similarity search returning raw chunks)
 - [x] Stage 4: Answer generation with citations and a "not enough context" path (page may be null until page extraction is added)
 - [x] Stage 5: Evaluation script (~20 questions with expected sources, reports retrieval hit rate)
-- [ ] Stage 6: pytest suite (mocked providers) and GitHub Actions CI
+- [x] Stage 6: pytest suite (mocked providers) and GitHub Actions CI
 - [ ] Stage 7: Ingestion CLI (`groundedqa ingest <folder>`), idempotent
 - [ ] Stage 8: Auth (API key) and tenant-filtered retrieval
 - [ ] Stage 9: Config and env overrides for all tunables. Embedding dimension is hard-coded to 1536 in db/init.sql while EMBEDDING_DIM is configurable. Make these consistent, and enforce a match at startup.
