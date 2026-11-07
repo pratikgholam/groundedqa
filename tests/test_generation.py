@@ -12,7 +12,7 @@ from app.services import embeddings as embeddings_module
 from app.services import generation as generation_module
 from app.services.errors import UpstreamProviderError
 
-EMBEDDING_DIM = 768
+EMBEDDING_DIM = 1536
 
 
 def formatted_records(records):

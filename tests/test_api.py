@@ -8,7 +8,7 @@ from app.models import Chunk, Document
 from app.services import embeddings as embeddings_module
 from app.services import generation as generation_module
 
-EMBEDDING_DIM = 768
+EMBEDDING_DIM = 1536
 
 
 def _fake_embed(texts, task=None):

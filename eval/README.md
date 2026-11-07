@@ -1,10 +1,9 @@
-# Evaluation (Stage 5) — retrieval hit rate against Ollama
+# Evaluation (Stage 5) — retrieval hit rate
 
 Run the retrieval hit-rate eval:
 
-    ollama pull nomic-embed-text        # once, to fetch the embedding model
-    cp .env.example .env                # EMBEDDING_* for the local Ollama provider
-    docker compose up -d db             # Postgres with pgvector must be running
+    cp .env.example .env                  # set OPENAI_API_KEY
+    docker compose up -d db               # Postgres with pgvector must be running
     python eval/run_eval.py
 
 Run the score diagnostic to pick SIMILARITY_CUTOFF from data:
@@ -14,9 +13,7 @@ Run the score diagnostic to pick SIMILARITY_CUTOFF from data:
 The script ingests eval/corpus through the same ingestion code the API uses,
 runs retrieval for each question in eval/questions.json, and prints the hit
 rate plus misses. It always exits 0 and deletes the documents it inserts, so
-re-running is safe. Chunks are embedded with the "search_document: " prefix
-and questions with "search_query: " (required by nomic-embed-text). Unit
-tests (tests/test_eval.py) need no API key or network.
+re-running is safe. Unit tests (tests/test_eval.py) need no API key or network.
 
 The corpus is 5 small hand-written documents and 17 scored questions, so the
 hit rate shows the pipeline works end to end, not general retrieval quality.

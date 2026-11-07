@@ -59,13 +59,13 @@ Settings are loaded from environment (via `.env`) with these defaults:
 |---|---|
 | `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/groundedqa` |
 | `OPENAI_API_KEY` | `""` |
-| `EMBEDDING_BASE_URL` | `http://localhost:11434/v1` |
-| `EMBEDDING_API_KEY` | `"ollama"` |
-| `EMBEDDING_MODEL` | `nomic-embed-text` |
-| `CHAT_BASE_URL` | `http://localhost:11434/v1` |
-| `CHAT_API_KEY` | `"ollama"` |
-| `CHAT_MODEL` | `lfm3-qa:latest` |
-| `EMBEDDING_DIM` | `768` |
+| `EMBEDDING_BASE_URL` | `https://api.openai.com/v1` |
+| `EMBEDDING_API_KEY` | `""` (falls back to `OPENAI_API_KEY`) |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` |
+| `CHAT_BASE_URL` | `https://api.openai.com/v1` |
+| `CHAT_API_KEY` | `""` (falls back to `OPENAI_API_KEY`) |
+| `CHAT_MODEL` | `gpt-4o-mini` |
+| `EMBEDDING_DIM` | `1536` |
 | `CHUNK_SIZE` | `800` |
 | `CHUNK_OVERLAP` | `100` |
 | `TOP_K` | `5` |
@@ -73,12 +73,11 @@ Settings are loaded from environment (via `.env`) with these defaults:
 | `MAX_UPLOAD_MB` | `10` |
 | `LOG_LEVEL` | `INFO` |
 
-Defaults use the local Ollama provider (`nomic-embed-text` for embeddings,
-`lfm3-qa:latest` for chat). OpenAI users must set `EMBEDDING_BASE_URL`,
-`EMBEDDING_MODEL`, `EMBEDDING_DIM`, `EMBEDDING_API_KEY`, `CHAT_BASE_URL`,
-`CHAT_MODEL`, and `CHAT_API_KEY`; `EMBEDDING_DIM` must match the DB column
-(`vector(768)` for `nomic-embed-text`; `vector(1536)` for
-`text-embedding-3-small`).
+Defaults use OpenAI (`text-embedding-3-small` for embeddings,
+`gpt-4o-mini` for chat). To use another OpenAI-compatible provider, override
+`EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`, `EMBEDDING_API_KEY`,
+`CHAT_BASE_URL`, `CHAT_MODEL`, and `CHAT_API_KEY`; `EMBEDDING_DIM` must match
+the DB column (`vector(1536)` for `text-embedding-3-small`).
 
 ## Evaluation
 
@@ -102,16 +101,19 @@ Fill in with what you actually chose and why:
 
 - **pgvector extension:** `init_db` runs `CREATE EXTENSION IF NOT EXISTS vector`, which requires superuser privileges; managed Postgres without extension rights will fail to start.
 - **No auth or rate limiting:** anyone who can reach the API can upload and query documents.
-- **Embedding/LLM calls go to the configured provider:** defaults to local
-  Ollama (`nomic-embed-text`); an API key is not required for Ollama. Tests
-  mock providers, so the suite needs no API key.
+- **Embedding/LLM calls go to the configured provider:** defaults to OpenAI
+  (`text-embedding-3-small` for embeddings, `gpt-4o-mini` for chat); an API key
+  is required for real ingestion and answers. Tests mock providers, so the
+  suite needs no API key.
 - **Chunking is character-based**, not token-based; results depend on the `CHUNK_SIZE`/`CHUNK_OVERLAP` settings.
 - **`found=true` is not a support guarantee:** it only means retrieved chunks passed `SIMILARITY_CUTOFF`; the model is not required to confirm support, so it may still answer from weak context.
 - **The similarity cutoff does not reliably separate on-topic from off-topic questions** on the current 5-document test corpus. As a result, `found=false` may not trigger for off-topic questions.
 - **The answerability check depends on the chat model's judgment.** Its accuracy has not been measured.
 - **With the local chat model, `/ask` is slow.** Latency depends on the hardware and the model.
 - **Page citations are not implemented:** every citation's `page` is `null`; page-level citations require a schema migration and extraction change (planned).
-- **Embedding dimension mismatch:** `db/init.sql` fixes the vector column at `vector(768)`, while `EMBEDDING_DIM` is configurable; they must match for storage to work.
+- **Embedding dimension mismatch:** `db/init.sql` and `EMBEDDING_DIM` now both
+  default to `1536`; if you override `EMBEDDING_DIM`, you must update
+  `db/init.sql` to match. Startup does not yet enforce the match (Stage 9).
 - **PDFs must have a text layer:** scanned/image-only PDFs yield no text.
 - **No streaming / pagination:** `/documents` returns all documents at once.
 
