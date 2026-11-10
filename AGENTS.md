@@ -77,4 +77,4 @@ Mark a stage done only when it works and is tested.
 - [x] Stage 8: Auth (API key) and tenant-filtered retrieval
 - [x] Stage 9: Config and env overrides for all tunables. Embedding dimension is hard-coded to 1536 in db/init.sql while EMBEDDING_DIM is configurable. Make these consistent, and enforce a match at startup.
 - [x] Stage 10: Packaging (quickstart in README, health and structured request logs). Upstream provider errors return 502 with a generic message and log at ERROR.
-- [ ] Stage 11: License file and dependency license check
+- [x] Stage 11: License file and dependency license check
