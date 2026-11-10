@@ -218,9 +218,9 @@ def _db_vector_dimension(db) -> int | None:
 def ensure_dimension_matches(db) -> None:
     """Fail clearly if the configured dimension differs from the DB schema.
 
-    db/init.sql fixes chunks.embedding at a fixed dimension while EMBEDDING_DIM is
-    configurable; they must match. This is enforced here instead of patching
-    around a mismatch (the real fix is Stage 9).
+    db/init.sql leaves the embedding column unconstrained so the dimension is
+    derived from EMBEDDING_DIM. They must match. This is enforced here instead
+    of patching around a mismatch (init_db enforces it at startup too).
     """
     actual = _db_vector_dimension(db)
     if actual is None:
@@ -232,8 +232,8 @@ def ensure_dimension_matches(db) -> None:
         raise SystemExit(
             "embedding dimension mismatch: "
             f"EMBEDDING_DIM={settings.EMBEDDING_DIM} but the database stores "
-            f"chunks.embedding as vector({actual}); "
-            "reconcile EMBEDDING_DIM with the schema (Stage 9) before running the eval"
+            "chunks.embedding as vector({actual}); "
+            "reconcile EMBEDDING_DIM with the schema before running the eval"
         )
 
 
