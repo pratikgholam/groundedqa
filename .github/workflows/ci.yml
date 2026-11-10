@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - 'db/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - 'db/**'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: groundedqa_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/groundedqa_test
+          PYTHONPATH: .
+        run: pytest
+
+  license-check:
+    name: Dependency license check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install pip-licenses
+        run: pip install pip-licenses
+
+      - name: Check direct dependency licenses are allowed
+        run: |
+          pip-licenses --from mixed --format=json --output-file /tmp/all_licenses.json
+          python - <<'PY'
+          import json, re, sys
+          from pathlib import Path
+
+          # License keywords we allow (matched case-insensitively as substrings so
+          # "MIT License", "BSD-3-Clause", "BSD License", etc. all pass).
+          ALLOWED = {"MIT", "BSD", "Apache-2.0", "LGPL-3.0-only", "PSF", "PostgreSQL"}
+
+          direct = []
+          for line in Path("requirements.txt").read_text().splitlines():
+              line = line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              name = re.split(r"[<>=!\[\]\(]", line, maxsplit=1)[0].strip()
+              if name:
+                  direct.append(name)
+
+          licenses = json.load(open("/tmp/all_licenses.json"))
+          license_by_name = {p["Name"].lower(): p["License"] for p in licenses}
+
+          bad = []
+          for name in direct:
+              lic = (license_by_name.get(name.lower()) or "").lower()
+              if not any(allowed.lower() in lic for allowed in ALLOWED):
+                  actual = license_by_name.get(name) or "(not found)"
+                  bad.append(f"{name}: {actual}")
+
+          if bad:
+              print("Disallowed or missing dependency licenses:")
+              for b in bad:
+                  print("  -", b)
+              print(f"\nAllowed license keywords: {sorted(ALLOWED)}")
+              sys.exit(1)
+          print(f"All {len(direct)} direct dependencies use allowed licenses.")
+          PY

@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# graphify - generated knowledge-graph artifacts (do not commit)
+graphify-out/
