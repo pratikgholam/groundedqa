@@ -53,6 +53,7 @@ jobs:
       - name: Run tests
         env:
           TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/groundedqa_test
+          PYTHONPATH: .
         run: pytest
 
   license-check:
