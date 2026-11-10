@@ -26,6 +26,22 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 10
     LOG_LEVEL: str = "INFO"
 
+    # API key required on all mutating/read endpoints except /health.
+    # When empty, auth is disabled (dev/local only).
+    API_KEY: str = ""
+
+    # Tenant ID required when API_KEY is set. Callers must send X-Tenant-ID
+    # matching this value; otherwise they get 403. When API_KEY is empty,
+    # X-Tenant-ID is still required but not validated against this value.
+    TENANT_ID: str = ""
+
+    # Question body length cap to bound embedding/LLM cost and memory.
+    MAX_QUESTION_LENGTH: int = 4000
+
+    # Simple token-bucket rate limiter: N requests per window seconds.
+    RATE_LIMIT_REQUESTS: int = 60
+    RATE_LIMIT_WINDOW: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

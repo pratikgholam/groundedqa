@@ -1,6 +1,8 @@
 # request/response models (Pydantic)
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.config import settings
 
 
 class HealthOut(BaseModel):
@@ -22,7 +24,7 @@ class CitationOut(BaseModel):
 
 
 class AskIn(BaseModel):
-    question: str
+    question: str = Field(max_length=settings.MAX_QUESTION_LENGTH)
 
 
 class AskOut(BaseModel):

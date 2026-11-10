@@ -41,7 +41,6 @@ def _fake_llm_client(check_content="YES", answer_content="The answer is grounded
 
 
 def _mock_chat(monkeypatch, client):
-    monkeypatch.setattr(generation_module, "_get_client", lambda: client)
     monkeypatch.setattr(generation_module, "_get_chat_client", lambda: client)
 
 
@@ -50,7 +49,7 @@ def test_ask_grounded_answer_with_citations(db_session, monkeypatch):
     llm_client = _fake_llm_client()
     _mock_chat(monkeypatch, llm_client)
 
-    doc = Document(filename="notes.txt")
+    doc = Document(filename="notes.txt", content_hash="abc123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     db_session.add(
@@ -64,7 +63,11 @@ def test_ask_grounded_answer_with_citations(db_session, monkeypatch):
     db_session.commit()
 
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert set(body) == {"answer", "found", "citations"}
@@ -83,7 +86,7 @@ def test_ask_answerable_check_no_skips_generation(db_session, monkeypatch):
     llm_client = _fake_llm_client(check_content="NO")
     _mock_chat(monkeypatch, llm_client)
 
-    doc = Document(filename="notes.txt")
+    doc = Document(filename="notes.txt", content_hash="abc123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     db_session.add(
@@ -97,7 +100,11 @@ def test_ask_answerable_check_no_skips_generation(db_session, monkeypatch):
     db_session.commit()
 
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["found"] is False
@@ -112,7 +119,7 @@ def test_ask_answerable_check_whitespace_is_yes(db_session, monkeypatch):
     llm_client = _fake_llm_client(check_content="yes ")
     _mock_chat(monkeypatch, llm_client)
 
-    doc = Document(filename="notes.txt")
+    doc = Document(filename="notes.txt", content_hash="abc123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     db_session.add(
@@ -126,7 +133,11 @@ def test_ask_answerable_check_whitespace_is_yes(db_session, monkeypatch):
     db_session.commit()
 
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["found"] is True
@@ -138,7 +149,7 @@ def test_ask_answerable_check_prose_is_no(db_session, monkeypatch):
     llm_client = _fake_llm_client(check_content="The passages do not say")
     _mock_chat(monkeypatch, llm_client)
 
-    doc = Document(filename="notes.txt")
+    doc = Document(filename="notes.txt", content_hash="abc123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     db_session.add(
@@ -152,7 +163,11 @@ def test_ask_answerable_check_prose_is_no(db_session, monkeypatch):
     db_session.commit()
 
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["found"] is False
@@ -166,7 +181,11 @@ def test_ask_refusal_when_no_chunks(db_session, monkeypatch):
     _mock_chat(monkeypatch, llm_client)
 
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["found"] is False
@@ -180,7 +199,7 @@ def test_ask_refusal_when_all_chunks_below_threshold(db_session, monkeypatch):
     llm_client = _fake_llm_client("unused")
     _mock_chat(monkeypatch, llm_client)
 
-    doc = Document(filename="notes.txt")
+    doc = Document(filename="notes.txt", content_hash="abc123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     # orthogonal to query embedding -> similarity 0 < SIMILARITY_CUTOFF (0.3)
@@ -195,7 +214,11 @@ def test_ask_refusal_when_all_chunks_below_threshold(db_session, monkeypatch):
     db_session.commit()
 
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["found"] is False
@@ -213,7 +236,7 @@ def test_ask_chat_failure_returns_502(db_session, monkeypatch, caplog):
         lambda: _fake_llm_client(exc=sdk_exc),
     )
 
-    doc = Document(filename="notes.txt")
+    doc = Document(filename="notes.txt", content_hash="abc123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     db_session.add(
@@ -228,7 +251,11 @@ def test_ask_chat_failure_returns_502(db_session, monkeypatch, caplog):
 
     caplog.set_level(logging.ERROR, logger="app.services.generation")
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 502, resp.text
     body = resp.json()
     assert body == {"detail": "Upstream model provider unavailable. Try again later."}
@@ -258,7 +285,11 @@ def test_ask_embedding_failure_returns_502(db_session, monkeypatch, caplog):
 
     caplog.set_level(logging.ERROR, logger="app.services.embeddings")
     client = TestClient(app)
-    resp = client.post("/ask", json={"question": "hello"})
+    resp = client.post(
+        "/ask",
+        json={"question": "hello"},
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 502, resp.text
     body = resp.json()
     assert body == {"detail": "Upstream model provider unavailable. Try again later."}
@@ -287,7 +318,11 @@ def test_documents_embedding_failure_returns_502_no_partial_write(
     caplog.set_level(logging.ERROR, logger="app.main")
     client = TestClient(app)
     files = {"file": ("notes.txt", b"hello world", "text/plain")}
-    resp = client.post("/documents", files=files)
+    resp = client.post(
+        "/documents",
+        files=files,
+        headers={"X-Tenant-ID": "tenant-1"},
+    )
     assert resp.status_code == 502, resp.text
     body = resp.json()
     assert body == {"detail": "Upstream model provider unavailable. Try again later."}

@@ -12,21 +12,40 @@ A document Q&A API that answers questions using only your documents and cites th
 
 ## API
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/documents` | Upload and index a document |
-| GET | `/documents` | List indexed documents |
-| POST | `/ask` | Ask a question; returns answer, found, and citations |
-| GET | `/health` | Health check |
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| POST | `/documents` | Yes (X-API-Key) | Upload and index a document |
+| GET | `/documents` | Yes (X-API-Key) | List indexed documents |
+| POST | `/ask` | Yes (X-API-Key) | Ask a question; returns answer, found, and citations |
+| GET | `/health` | No | Health check |
 
 ## Error behavior
 
 Upstream provider (embedding/LLM) failures return HTTP 502 with a generic message (`"Upstream model provider unavailable. Try again later."`) and are logged at `ERROR`. Provider exception messages are never returned to the client or included in the log message.
 
+## Security
+
+All mutating and read endpoints (`/documents`, `/ask`) require an `X-API-Key`
+header matching the configured `API_KEY`. `/health` is unauthenticated for
+uptime checks. When `API_KEY` is empty (the default), authentication is
+disabled — suitable only for local/dev use.
+
+Requests are rate-limited per client IP (`RATE_LIMIT_REQUESTS` per
+`RATE_LIMIT_WINDOW` seconds). Responses include security headers:
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`, and a restrictive `Content-Security-Policy`.
+
+The Docker image runs as a non-root user (`groundedqa`).
+
 ## Data model (current schema)
 
-- `documents`: id, filename, created_at
+- `documents`: id, filename, content_hash, version, created_at
 - `chunks`: id, document_id, chunk_index, text, embedding (vector)
+
+`content_hash` (SHA-256 of the file bytes) makes re-ingestion idempotent:
+uploading the same file twice returns the existing document without creating
+duplicates. Uploading the same filename with different content bumps `version`
+and replaces the old chunks.
 
 ## Tech stack
 
@@ -72,6 +91,10 @@ Settings are loaded from environment (via `.env`) with these defaults:
 | `SIMILARITY_CUTOFF` | `0.3` |
 | `MAX_UPLOAD_MB` | `10` |
 | `LOG_LEVEL` | `INFO` |
+| `API_KEY` | `""` (auth disabled when empty) |
+| `RATE_LIMIT_REQUESTS` | `60` |
+| `RATE_LIMIT_WINDOW` | `60` |
+| `MAX_QUESTION_LENGTH` | `4000` |
 
 Defaults use OpenAI (`text-embedding-3-small` for embeddings,
 `gpt-4o-mini` for chat). To use another OpenAI-compatible provider, override
@@ -99,8 +122,9 @@ Fill in with what you actually chose and why:
 
 ## Limitations
 
-- **pgvector extension:** `init_db` runs `CREATE EXTENSION IF NOT EXISTS vector`, which requires superuser privileges; managed Postgres without extension rights will fail to start.
-- **No auth or rate limiting:** anyone who can reach the API can upload and query documents.
+- **pgvector extension:** `init_db` runs `CREATE EXTENSION IF NOT EXISTS vector`, which requires superuser privileges; managed Postgres without extension rights will fail to start. Startup now fails fast with a clear error instead of failing on first ingestion.
+- **Auth is single-key:** one `API_KEY` controls access to all endpoints; there is no per-client key rotation or tenant isolation (planned for Stage 8).
+- **Rate limiting is in-memory:** the limiter is per-process and not shared across workers or restart-safe.
 - **Embedding/LLM calls go to the configured provider:** defaults to OpenAI
   (`text-embedding-3-small` for embeddings, `gpt-4o-mini` for chat); an API key
   is required for real ingestion and answers. Tests mock providers, so the
@@ -111,9 +135,7 @@ Fill in with what you actually chose and why:
 - **The answerability check depends on the chat model's judgment.** Its accuracy has not been measured.
 - **With the local chat model, `/ask` is slow.** Latency depends on the hardware and the model.
 - **Page citations are not implemented:** every citation's `page` is `null`; page-level citations require a schema migration and extraction change (planned).
-- **Embedding dimension mismatch:** `db/init.sql` and `EMBEDDING_DIM` now both
-  default to `1536`; if you override `EMBEDDING_DIM`, you must update
-  `db/init.sql` to match. Startup does not yet enforce the match (Stage 9).
+- **Embedding dimension derives from `EMBEDDING_DIM`:** `db/init.sql` no longer hard-codes the vector dimension; `init_db()` sets `chunks.embedding` to `vector(EMBEDDING_DIM)` on first startup and verifies the match on every start. If you override `EMBEDDING_DIM` on an existing database, the app refuses to start rather than risk silently storing mismatched vectors.
 - **PDFs must have a text layer:** scanned/image-only PDFs yield no text.
 - **No streaming / pagination:** `/documents` returns all documents at once.
 

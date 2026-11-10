@@ -21,6 +21,7 @@ from data, not from a round number.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import statistics
 import sys
@@ -253,7 +254,13 @@ def ingest_corpus(db):
             inserted.append((path.name, None, 0))
             continue
         vectors = embeddings.embed_texts(chunks)
-        document = Document(filename=path.name)
+        content_hash = hashlib.sha256(content).hexdigest()
+        document = Document(
+            filename=path.name,
+            tenant_id="tenant-1",
+            content_hash=content_hash,
+            version=1,
+        )
         db.add(document)
         db.flush()
         db.add_all(

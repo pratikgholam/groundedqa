@@ -8,6 +8,9 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS documents (
     id BIGSERIAL PRIMARY KEY,
     filename TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -16,7 +19,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
     text TEXT NOT NULL,
-    embedding vector(1536)
+    embedding vector
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);

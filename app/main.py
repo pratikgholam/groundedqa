@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import init_db
+from app.middleware import SecurityHeadersMiddleware
 from app.routers import documents, health, ask
 from app.services.errors import UpstreamProviderError
 
@@ -20,6 +21,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Grounded QA", lifespan=lifespan)
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.exception_handler(UpstreamProviderError)

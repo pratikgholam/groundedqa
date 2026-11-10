@@ -1,8 +1,11 @@
 # POST/GET /documents
+import hashlib
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.auth import get_tenant_id, rate_limit, verify_api_key
 from app.db import get_db
 from app.models import Chunk, Document
 from app.schemas import DocumentOut
@@ -11,12 +14,17 @@ from app.services.chunking import chunk_text
 from app.services.extraction import extract_text
 from app.config import settings
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(verify_api_key), Depends(rate_limit)]
+)
 
 
 @router.post("/documents", response_model=DocumentOut)
 async def upload_document(
-    request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
 ):
     max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
 
@@ -40,8 +48,37 @@ async def upload_document(
         pieces.append(piece)
     content = b"".join(pieces)
 
+    filename = file.filename or "upload"
+    content_hash = hashlib.sha256(content).hexdigest()
+
+    # Idempotent: identical content already indexed for this tenant? Return
+    # the existing document without creating duplicates or new chunks.
+    existing = db.execute(
+        select(Document).where(
+            Document.content_hash == content_hash,
+            Document.tenant_id == tenant_id,
+        )
+    ).first()
+    if existing:
+        document = existing[0]
+        chunk_count = (
+            db.execute(
+                select(func.count(Chunk.id)).where(
+                    Chunk.document_id == document.id
+                )
+            )
+            .scalar()
+            or 0
+        )
+        return DocumentOut(
+            id=document.id,
+            filename=document.filename,
+            created_at=document.created_at,
+            chunk_count=chunk_count,
+        )
+
     try:
-        text = extract_text(file.filename or "upload", content)
+        text = extract_text(filename, content)
     except ValueError as exc:
         raise HTTPException(415, str(exc))
 
@@ -49,10 +86,32 @@ async def upload_document(
     if not chunks:
         raise HTTPException(400, "No text extracted from document")
 
+    # Embed before touching the database so a provider failure leaves no
+    # partial write behind.
     vectors = embeddings.embed_texts(chunks)
 
-    document = Document(filename=file.filename or "upload")
-    db.add(document)
+    # Same filename + same tenant, different content → new version: replace
+    # old chunks. Different tenant with same filename is a separate document.
+    existing_by_name = db.execute(
+        select(Document).where(
+            Document.filename == filename, Document.tenant_id == tenant_id
+        )
+    ).first()
+    if existing_by_name:
+        document = existing_by_name[0]
+        document.version += 1
+        document.content_hash = content_hash
+        db.execute(
+            delete(Chunk).where(Chunk.document_id == document.id)
+        )
+    else:
+        document = Document(
+            filename=filename,
+            tenant_id=tenant_id,
+            content_hash=content_hash,
+            version=1,
+        )
+        db.add(document)
     db.flush()  # assign document.id
 
     try:
@@ -82,10 +141,13 @@ async def upload_document(
 
 
 @router.get("/documents", response_model=list[DocumentOut])
-def list_documents(db: Session = Depends(get_db)):
+def list_documents(
+    db: Session = Depends(get_db), tenant_id: str = Depends(get_tenant_id)
+):
     statement = (
         select(Document, func.count(Chunk.id).label("chunk_count"))
         .outerjoin(Chunk, Chunk.document_id == Document.id)
+        .where(Document.tenant_id == tenant_id)
         .group_by(Document.id)
         .order_by(Document.created_at.desc())
     )

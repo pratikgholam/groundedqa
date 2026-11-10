@@ -13,7 +13,7 @@ def _fake_embed(texts, task=None):
 
 def test_retrieve_orders_by_similarity(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
-    doc = Document(filename="doc.txt")
+    doc = Document(filename="doc.txt", content_hash="hash123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     # identical to query -> similarity 1.0
@@ -36,7 +36,9 @@ def test_retrieve_orders_by_similarity(db_session, monkeypatch):
     )
     db_session.commit()
 
-    results = retrieve("query", db_session, similarity_cutoff=0.0)
+    results = retrieve(
+        "query", db_session, tenant_id="tenant-1", similarity_cutoff=0.0
+    )
     assert len(results) == 2
     assert results[0]["text"] == "exact match"
     assert results[1]["text"] == "orthogonal"
@@ -46,7 +48,7 @@ def test_retrieve_orders_by_similarity(db_session, monkeypatch):
 
 def test_retrieve_filters_by_similarity_cutoff(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
-    doc = Document(filename="doc.txt")
+    doc = Document(filename="doc.txt", content_hash="hash123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     db_session.add(
@@ -67,14 +69,16 @@ def test_retrieve_filters_by_similarity_cutoff(db_session, monkeypatch):
     )
     db_session.commit()
 
-    results = retrieve("query", db_session, similarity_cutoff=0.5)
+    results = retrieve(
+        "query", db_session, tenant_id="tenant-1", similarity_cutoff=0.5
+    )
     assert len(results) == 1
     assert results[0]["text"] == "exact"
 
 
 def test_retrieve_limits_to_top_k(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
-    doc = Document(filename="doc.txt")
+    doc = Document(filename="doc.txt", content_hash="hash123", tenant_id="tenant-1")
     db_session.add(doc)
     db_session.flush()
     for index in range(5):
@@ -88,13 +92,13 @@ def test_retrieve_limits_to_top_k(db_session, monkeypatch):
         )
     db_session.commit()
 
-    results = retrieve("query", db_session, top_k=2)
+    results = retrieve("query", db_session, tenant_id="tenant-1", top_k=2)
     assert len(results) == 2
 
 
 def test_retrieve_empty_when_no_chunks(db_session, monkeypatch):
     monkeypatch.setattr(embeddings_module, "embed_texts", _fake_embed)
-    assert retrieve("query", db_session) == []
+    assert retrieve("query", db_session, tenant_id="tenant-1") == []
 
 
 def test_retrieve_rolls_back_on_db_error(db_session, monkeypatch):
@@ -108,6 +112,6 @@ def test_retrieve_rolls_back_on_db_error(db_session, monkeypatch):
     db_session.rollback = lambda *a, **k: rollback_called.append(True)
 
     with pytest.raises(Exception, match="db query failed"):
-        retrieve("query", db_session)
+        retrieve("query", db_session, tenant_id="tenant-1")
 
     assert rollback_called == [True]

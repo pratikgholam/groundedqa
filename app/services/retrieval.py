@@ -9,6 +9,7 @@ from app.services import embeddings
 def retrieve(
     query_text: str,
     db,
+    tenant_id: str | None = None,
     top_k: int | None = None,
     similarity_cutoff: float | None = None,
 ) -> list[dict]:
@@ -18,6 +19,9 @@ def retrieve(
     ascending distance, and returns matching chunks with their source document
     filename and cosine-similarity score. Chunks below `similarity_cutoff` are
     dropped. Cosine similarity = 1 - cosine distance.
+
+    When `tenant_id` is given, results are scoped to documents owned by that
+    tenant so callers can never read another tenant's chunks.
     """
     if top_k is None:
         top_k = settings.TOP_K
@@ -30,9 +34,10 @@ def retrieve(
     statement = (
         select(Chunk, Document.filename, distance.label("distance"))
         .join(Document, Chunk.document_id == Document.id)
-        .order_by(distance.asc())
-        .limit(top_k)
     )
+    if tenant_id is not None:
+        statement = statement.where(Document.tenant_id == tenant_id)
+    statement = statement.order_by(distance.asc()).limit(top_k)
     try:
         rows = db.execute(statement).all()
     except Exception:
