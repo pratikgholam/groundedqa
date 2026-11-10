@@ -51,7 +51,7 @@ and replaces the old chunks.
 
 Python, FastAPI, PostgreSQL + pgvector, pytest, Docker Compose.
 
-CI via GitHub Actions is planned (no `.github/workflows` yet).
+CI runs on every push and PR via `.github/workflows/ci.yml`.
 
 ## Run locally
 
@@ -61,6 +61,38 @@ docker compose up --build
 ```
 
 API docs at `http://localhost:8000/docs`.
+
+Quick checks:
+
+```bash
+# Health (no auth)
+curl http://localhost:8000/health
+
+# Upload a document (requires X-API-Key and X-Tenant-ID)
+curl -X POST http://localhost:8000/documents \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Tenant-ID: tenant-1" \
+  -F "file=@notes.txt"
+
+# Ask a question (requires X-API-Key and X-Tenant-ID)
+curl -X POST http://localhost:8000/ask \
+  -H "X-API-Key: $API_KEY" \
+  -H "X-Tenant-ID: tenant-1" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the document about?"}'
+```
+
+## Logs
+
+Every request emits one structured log line:
+
+```
+rid=<request_id> <METHOD> <path> status=<status_code> dur_ms=<duration_ms> ip=<client_ip>
+```
+
+The `X-Request-ID` response header echoes the request id so logs can be traced
+to a specific call. Upstream provider failures are logged at `ERROR` and return
+HTTP 502 with a generic message (provider details are never leaked).
 
 ## Tests
 

@@ -1,5 +1,6 @@
 # FastAPI app, router registration
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -7,11 +8,22 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db import init_db
-from app.middleware import SecurityHeadersMiddleware
+from app.middleware import (
+    RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
+    _RequestFormatter,
+)
 from app.routers import documents, health, ask
 from app.services.errors import UpstreamProviderError
 
-logging.basicConfig(level=settings.LOG_LEVEL.upper())
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(
+    _RequestFormatter(
+        "%(asctime)s %(levelname)-5s %(name)s rid=%(request_id)s %(method)s %(path)s "
+        "status=%(status_code)s dur_ms=%(duration_ms)s ip=%(client_ip)s %(message)s"
+    )
+)
+logging.basicConfig(level=settings.LOG_LEVEL.upper(), handlers=[_handler])
 
 
 @asynccontextmanager
@@ -23,6 +35,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Grounded QA", lifespan=lifespan)
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.exception_handler(UpstreamProviderError)
